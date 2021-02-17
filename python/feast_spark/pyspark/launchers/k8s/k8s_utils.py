@@ -1,4 +1,3 @@
-import hashlib
 from copy import deepcopy
 from datetime import datetime
 from typing import Any, Dict, List, NamedTuple, Optional, Tuple
@@ -7,6 +6,8 @@ from kubernetes import client, config
 from kubernetes.client.api import CustomObjectsApi
 
 from feast_spark.pyspark.abc import SparkJobStatus
+
+from .k8s import _generate_project_table_hash
 
 __all__ = [
     "_get_api",
@@ -234,7 +235,7 @@ def _list_jobs(
 
     # Batch, Streaming Ingestion jobs
     if project and table_name:
-        table_name_hash = hashlib.md5(f"{project}:{table_name}".encode()).hexdigest()
+        table_name_hash = _generate_project_table_hash(project, table_name)
         response = api.list_namespaced_custom_object(
             **_crd_args(namespace),
             label_selector=f"{LABEL_FEATURE_TABLE_HASH}={table_name_hash}",
