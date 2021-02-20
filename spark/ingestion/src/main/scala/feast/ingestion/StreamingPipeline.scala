@@ -31,7 +31,7 @@ import org.apache.commons.lang.StringUtils
 import org.apache.spark.{SparkEnv, SparkFiles}
 import org.apache.spark.api.python.DynamicPythonFunction
 import org.apache.spark.sql.streaming.StreamingQuery
-import org.apache.spark.sql.avro._
+import org.apache.spark.sql.avro.functions.from_avro
 import org.apache.spark.sql.execution.python.UserDefinedPythonFunction
 import org.apache.spark.sql.execution.streaming.ProcessingTimeTrigger
 import org.apache.spark.sql.types.BooleanType
@@ -55,7 +55,7 @@ object StreamingPipeline extends BasePipeline with Serializable {
 
     val featureTable = config.featureTable
     val projection =
-      inputProjection(config.source, featureTable.features, featureTable.entities)
+      BasePipeline.inputProjection(config.source, featureTable.features, featureTable.entities)
     val rowValidator  = new RowValidator(featureTable, config.source.eventTimestampColumn)
     val metrics       = new IngestionPipelineMetrics
     val validationUDF = createValidationUDF(sparkSession, config)
@@ -77,7 +77,7 @@ object StreamingPipeline extends BasePipeline with Serializable {
         input.withColumn("features", parser($"value"))
       case AvroFormat(schemaJson) =>
         input.select(from_avro($"value", schemaJson).alias("features"))
-      case _ =>
+      case ParquetFormat =>
         val columns = input.columns.map(input(_))
         input.select(struct(columns: _*).alias("features"))
     }
@@ -104,7 +104,7 @@ object StreamingPipeline extends BasePipeline with Serializable {
           batchDF.withColumn("_isValid", rowValidator.allChecks)
         }
         rowsAfterValidation.persist()
-        implicit def rowEncoder: Encoder[Row] = RowEncoder(rowsAfterValidation.schema)
+        implicit val rowEncoder: Encoder[Row] = RowEncoder(rowsAfterValidation.schema)
 
         rowsAfterValidation
           .map(metrics.incrementRead)
